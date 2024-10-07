@@ -3459,6 +3459,12 @@
 		(uuid "1d2e4c69-de8e-417e-823c-9ee03106cca4")
 	)
 	(junction
+		(at 53.34 63.5)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "2a6e580e-35a0-45b6-87d7-f0b030a1347f")
+	)
+	(junction
 		(at 62.23 73.66)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -3553,6 +3559,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "6e77657d-bfaa-44c6-bac4-e7bdf8373841")
+	)
+	(junction
+		(at 60.96 63.5)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "746450d5-97ca-4802-a00f-0a5ae141c1ab")
 	)
 	(junction
 		(at 162.56 41.91)
@@ -3735,6 +3747,16 @@
 			(type default)
 		)
 		(uuid "0581523c-bd7e-442f-b9e9-636754995439")
+	)
+	(wire
+		(pts
+			(xy 60.96 58.42) (xy 60.96 63.5)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "08aa22bb-da56-4b16-9753-dbc2859096fc")
 	)
 	(wire
 		(pts
@@ -4995,6 +5017,16 @@
 			(type default)
 		)
 		(uuid "d91ed125-fad6-4041-9b78-2b86b0a85d31")
+	)
+	(wire
+		(pts
+			(xy 53.34 58.42) (xy 53.34 63.5)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "db260c89-9cdd-4374-9e3a-5e7185036504")
 	)
 	(wire
 		(pts
@@ -9401,7 +9433,7 @@
 	)
 	(text "Input impedance 1MOhm\ndivide by 5, giving range of +-15V"
 		(exclude_from_sim no)
-		(at 52.832 51.562 0)
+		(at 51.562 41.148 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -10416,6 +10448,82 @@
 		)
 	)
 	(symbol
+		(lib_id "Device:R_US")
+		(at 57.15 58.42 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "2e5b907a-ecc9-4e78-8501-34f1663ca5b4")
+		(property "Reference" "R9"
+			(at 54.102 56.134 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1.6M 1%"
+			(at 60.96 56.134 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+			(at 57.404 57.404 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 57.15 58.42 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor, US symbol"
+			(at 57.15 58.42 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC Part" "C172161"
+			(at 57.15 58.42 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "8a607a36-10c8-4453-9b6e-b025f67691b5")
+		)
+		(pin "2"
+			(uuid "4ee778e6-e112-467f-90b1-b37196c818b4")
+		)
+		(instances
+			(project "SaoScope"
+				(path "/a633a3cb-d3b7-422b-9438-b60cd33ff473"
+					(reference "R9")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:R_Pack04_Split")
 		(at 261.62 127 180)
 		(unit 4)
@@ -10914,18 +11022,17 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "411e06b5-b20c-4bfe-becd-d75ead064c88")
 		(property "Reference" "R1"
-			(at 57.15 57.15 90)
+			(at 54.102 65.532 90)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "800K 1%"
-			(at 57.15 59.69 90)
+		(property "Value" "1.6M 1%"
+			(at 60.198 65.532 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10952,6 +11059,15 @@
 		)
 		(property "Description" "Resistor, US symbol"
 			(at 57.15 63.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC Part" "C172161"
+			(at 57.15 63.5 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12428,6 +12544,15 @@
 			)
 		)
 		(property "Description" "Resistor, US symbol"
+			(at 62.23 69.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC Part" "C25764"
 			(at 62.23 69.85 0)
 			(effects
 				(font
