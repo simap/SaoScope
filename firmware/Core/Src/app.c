@@ -6,6 +6,8 @@
  */
 
 #include "main.h"
+#include "app.h"
+
 #include "ssd1306.h"
 #include "ssd1306_tests.h"
 
@@ -13,14 +15,8 @@
 #include "button.h"
 
 Sampler sampler;
-
 ButtonState button1, button2, button3;
-
-
-
 extern uint8_t SSD1306_Buffer[SSD1306_BUFFER_SIZE];
-
-
 volatile uint32_t ticks;
 
 
@@ -28,11 +24,8 @@ uint32_t getCycles() {
 	return SysTick->VAL;
 }
 
-volatile uint32_t pollDuration;
 void systickISR() {
 	ticks++;
-
-	volatile uint32_t c = getCycles();
 	if (ticks & 1) {
 		//processing 3 buttons takes about 312 cycles
 		// uint32_t gpioState = GPIOA->IDR;
@@ -40,7 +33,6 @@ void systickISR() {
 		// buttonProcess(&button2, !(gpioState & BUTTON2_Pin)); //button2 is active low
 		// buttonProcess(&button3, !(gpioState & BUTTON3_Pin)); //button3 is active low
 	}
-	pollDuration = c - getCycles();
 
 //	if (ticks & 1) {
 //		LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_7);

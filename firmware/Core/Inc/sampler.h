@@ -10,9 +10,7 @@
 
 #include "main.h"
 
-
-#define SAMPLE_BUFFER_SIZE 1024
-#define SAMPLE_BUFFER_MASK 0x3FF
+#include "app.h"
 
 typedef enum {
 	SPEED_ULTRA, // div: 1, sampleTime: 1.5, resTime: 6.5     = 3,500,000 SPS
