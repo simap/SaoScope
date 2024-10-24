@@ -9876,7 +9876,7 @@
 				)
 			)
 		)
-		(property "Value" "47"
+		(property "Value" "1K"
 			(at 42.418 48.514 90)
 			(effects
 				(font
@@ -9911,7 +9911,7 @@
 				(hide yes)
 			)
 		)
-		(property "LCSC Part" "C172161"
+		(property "LCSC Part" ""
 			(at 40.64 50.8 90)
 			(effects
 				(font
@@ -12808,7 +12808,7 @@
 				(hide yes)
 			)
 		)
-		(property "LCSC Part" "C172161"
+		(property "LCSC Part" ""
 			(at 31.75 76.2 90)
 			(effects
 				(font
