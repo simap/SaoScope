@@ -93,7 +93,7 @@ typedef struct {
 	SampleMode sampleMode;
 	DrawMode drawMode;
 
-	uint16_t triggerIndex;
+	int32_t triggerIndex;
 	int32_t minVoltage;
 	int32_t maxVoltage;
 } ScopeSettings;

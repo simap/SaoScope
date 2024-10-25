@@ -26,6 +26,16 @@ typedef struct {
 	int16_t dcOffset;
 	SamplerSpeed speed;
 	int shift;
+	uint8_t isLocked;
+
+	//ADC settings
+	uint32_t adcClock;
+	uint32_t adcSampleTime;
+	uint32_t adcResolution;
+	//TODO oversample settings are all in CFGR2, maybe just use one var and mask it
+	uint32_t adcOversampleEnabled;
+	uint32_t adcOversampleRatio;
+	uint32_t adcOversampleShift;
 } Sampler;
 
 

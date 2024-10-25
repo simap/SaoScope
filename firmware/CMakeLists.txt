@@ -49,7 +49,9 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/app.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/adcmanager.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/button.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/dial.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/sampler.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/scope.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/ssd1306_fonts.c
