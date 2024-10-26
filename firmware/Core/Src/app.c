@@ -144,7 +144,22 @@ void run() {
     		frame = 0;
     	}
 
+		if (dialPollChangeEvent(&dial3)) {
+			uint32_t tmp = dialGetValue(&dial3);
+			tmp = (tmp * tmp)/95;
+			rate = tmp * 35000;
+			rate = setSampleRate(&sampler, rate);
+		}
+
+		if (buttonPollClickEvent(&button2)) {
+			run = !run;
+		}
+
 		// stopSampler(&sampler);
+
+		if (!run) {
+			continue;
+		}
 
 
         ssd1306_Fill(Black);
@@ -173,6 +188,8 @@ void run() {
 
 		start -= 64;
 
+		int vdiv = dialGetValue(&dial2);
+		int vpos = dialGetValue(&dial1);
 
 		SSD1306_COLOR blink = (getTicks() & 0x80) ? White : Black;
 		for (int x = 0; x < SSD1306_WIDTH; x++) {
@@ -184,7 +201,8 @@ void run() {
 			if (mv < minVoltage)
 				minVoltage = mv;
 
-			int y = 42 - sample/10;
+			int y = vpos - sample/vdiv;
+
 //				int y = 31 - sample/100;
 			SSD1306_COLOR color = White;
 			if (y > 63) {
@@ -217,7 +235,7 @@ void run() {
 		// ssd1306_SetCursor(1, 24 + yStart);
 		// ssd1306_WriteString(buff, Font_6x8, White);
 
-		snprintf(buff, sizeof(buff), "VDD: %dmv", vdd);
+		snprintf(buff, sizeof(buff), "V: %dmv %dsps", vdd, rate);
 		ssd1306_SetCursor(1, 16 + yStart);
 		ssd1306_WriteString(buff, Font_6x8, White);
 
@@ -235,8 +253,5 @@ void run() {
         ssd1306_UpdateScreen();
 
         frame++;
-
-        delay(1);
-
     }
 }
