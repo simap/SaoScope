@@ -4,11 +4,6 @@
 #include "sampler.h"
 #include "stdio.h"
 
-extern Sampler sampler;
-
-ScopeSettings scope;
-//	TAMP->BKP0R
-
 #define TDIVMODCALC(xDivNs, rate) {xDivNs, rate, 1000000000 / rate}
 
 typedef struct {
@@ -36,25 +31,14 @@ uint32_t frameTimer = 0;
 int fps = 0;
 int pwm;
 
-void handkeModePress() {
 
-}
-
-void handleUpPress() {
-
-}
-
-void handleDownPress() {
-
-}
-
-void drawInfoPanel() {
+void scopeDrawInfoPanel(ScopeSettings *scope, Sampler *sampler) {
 	char buff[64];
 
 
 
 	ssd1306_FillRectangle(0, 15, 48, 32, White);
-	int Vp = (scope.maxVoltage - scope.minVoltage)/10;
+	int Vp = (scope->maxVoltage - scope->minVoltage)/10;
 	int VpVolts = Vp/100;
 	int VpHv = (Vp - VpVolts*100);
 	snprintf(buff, sizeof(buff), "Vp: %d.%02d", VpVolts, VpHv);
@@ -68,7 +52,7 @@ void drawInfoPanel() {
 
 
 
-void drawScope() {
+void scopeDraw(ScopeSettings *scope, Sampler *sampler) {
 
 	if (getTicks() - frameTimer >= 1000) {
 		fps = frame;
@@ -102,43 +86,43 @@ void drawScope() {
 		ssd1306_SetContrast(0xff);
 	}
 
-	scope.minVoltage = INT32_MAX;
-	scope.maxVoltage = INT32_MIN;
+	scope->minVoltage = INT32_MAX;
+	scope->maxVoltage = INT32_MIN;
 
 
 
 
 	//find first rising edge
 
-	scope.triggerIndex  = -1;
+	scope->triggerIndex  = -1;
 	for (int x = 64; x < 1024; x++) {
-		int sample = getSample(&sampler, x);
-		if (scope.triggerIndex  == -1 && sample < 200) {
-			scope.triggerIndex  = x;
+		int sample = getSample(sampler, x);
+		if (scope->triggerIndex  == -1 && sample < 200) {
+			scope->triggerIndex  = x;
 		}
 
-		if (scope.triggerIndex  >= 0 && sample > 200) {
-			scope.triggerIndex  = x;
+		if (scope->triggerIndex  >= 0 && sample > 200) {
+			scope->triggerIndex  = x;
 			break;
 		}
 	}
 
-	if (scope.triggerIndex  < 64 || scope.triggerIndex  > 800)
-		scope.triggerIndex  = 64;
+	if (scope->triggerIndex  < 64 || scope->triggerIndex  > 800)
+		scope->triggerIndex  = 64;
 
-	scope.triggerIndex  -= 64;
+	scope->triggerIndex  -= 64;
 
 
 	for (int x = 0; x < SSD1306_WIDTH; x++) {
 
-		int sample = getSample(&sampler, x + scope.triggerIndex );
+		int sample = getSample(sampler, x + scope->triggerIndex );
 
 		int mv = 6600 * sample / 2048;
 
-		if (mv > scope.maxVoltage)
-			scope.maxVoltage = mv;
-		if (mv < scope.minVoltage)
-			scope.minVoltage = mv;
+		if (mv > scope->maxVoltage)
+			scope->maxVoltage = mv;
+		if (mv < scope->minVoltage)
+			scope->minVoltage = mv;
 
 		if (pwm > 0) {
 			int y = 31 - sample/20;

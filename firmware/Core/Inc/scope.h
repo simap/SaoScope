@@ -11,20 +11,6 @@
 
 #include <stdint.h>
 
-typedef enum {
-	UI_SCOPE,
-	UI_SETTINGS,
-} ScopeUIMode;
-
-typedef enum {
-	MENU_CLOSE,
-	MENU_TDIV,
-	MENU_TOFFSET,
-	MENU_VDIV,
-	MENU_VOFFSET,
-	MENU_TRIGGER_THRESHOLD,
-	MENU_TRIGGER_EDGE,
-} ScopeMenuSetting;
 
 typedef enum {
 	CONTINUOUS, // Continuous signal display
@@ -48,20 +34,12 @@ typedef enum {
     CHANNEL_1   //use the scope channel (with a threshold)
 } TriggerSource;
 
-typedef enum {
-    AC,
-    DC
-} CouplingMode;
 
 typedef struct {
 	uint32_t YDivUv;        // Vertical scale in microvolts/div
 	int32_t YOffsetUv;      // Vertical offset in microvolts
-	CouplingMode coupling;
 } ChannelSettings;
 
-
-//draw dots / vector
-//aquire sample, peak, average
 
 typedef enum {
 	SAMPLE, PEAK, AVERAGE
@@ -81,29 +59,25 @@ typedef struct {
 	RunMode runMode;
 
 	uint32_t XDivNs;   // Horizontal scale in ns/div
-	int32_t XOffsetNs; // Horizontal offset in ns
+	// int32_t XOffsetNs; // Horizontal offset in ns
 
 	ChannelSettings channel1;
 
-	TriggerSource triggerSource;
+	// TriggerSource triggerSource;
 	TriggerEdge triggerSlope;
 	int32_t triggerLevelUv; // For analog sources, the voltage threshold in microvolts
-	uint32_t triggerHoldoffUs; // microseconds to ignore trigger sources for this long
+	// uint32_t triggerHoldoffUs; // microseconds to ignore trigger sources for this long
 
 	SampleMode sampleMode;
 	DrawMode drawMode;
 
 	int32_t triggerIndex;
+
+	//analysis data
 	int32_t minVoltage;
 	int32_t maxVoltage;
+	//maybe add frequency, etc
 } ScopeSettings;
 
-
-/*
-
-at 2Msps, 10 samples/div, XDivNs can be as low as 5000 (5us/div).
-pushing it to every 22 cycles. with 8 bit, 1.5 sample time 2.91Msps gives 2750.
-
- */
 
 #endif /* INC_SCOPE_H_ */

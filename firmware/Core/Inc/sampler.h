@@ -12,27 +12,22 @@
 
 #include "app.h"
 
-typedef enum {
-	SPEED_ULTRA, // div: 1, sampleTime: 1.5, resTime: 6.5     = 3,500,000 SPS
-	SPEED_FAST, // div: 1, sampleTime: 3.5, resTime: 8.5      = 2,916,667 SPS
-	SPEED_NORMAL, // div: 1, sampleTime: 7.5, resTime: 12.5   = 1,750,000 SPS
-} SamplerSpeed;
-
 
 typedef struct {
 	uint32_t sampleRate;
 	volatile uint16_t sampleBuffer[SAMPLE_BUFFER_SIZE];
 	int startIndex;
-	int16_t dcOffset;
-	SamplerSpeed speed;
-	int shift;
-	uint8_t isLocked;
 
-	//ADC settings
+	volatile uint16_t snapshot[SAMPLE_BUFFER_SIZE]; //copy of the sample buffer for display
+	volatile uint8_t newSnapshotReady;
+	int16_t dcOffset;
+	int shift; //number of bits to shift the sample left to get a 12 bit value (in case of 8 or 6 bit sampling)
+
+	//ADC settings to get this sampleRate
 	uint32_t adcClock;
 	uint32_t adcSampleTime;
 	uint32_t adcResolution;
-	//TODO oversample settings are all in CFGR2, maybe just use one var and mask it
+	//TODO oversample settings are all in CFGR2, maybe just use one var here along with MODIFY_REG
 	uint32_t adcOversampleEnabled;
 	uint32_t adcOversampleRatio;
 	uint32_t adcOversampleShift;

@@ -780,8 +780,6 @@ static void MX_TIM17_Init(void)
 
   /* USER CODE BEGIN TIM17_Init 1 */
 
-  int cycles = 64000000 / 50000;
-
   /* USER CODE END TIM17_Init 1 */
   TIM_InitStruct.Prescaler = 0;
   TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_UP;

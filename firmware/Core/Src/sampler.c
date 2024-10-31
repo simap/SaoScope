@@ -38,7 +38,6 @@ uint32_t setSampleRate(Sampler *sampler, uint32_t rate) {
 	if (rate > 2916667) {
 		//{div: 2, sampleTime: 3.5, resTime: 6.5, ns: 285.7142857142857, rate: '3,500,000'}
 		actualRate = 3500000;
-		sampler->speed = SPEED_ULTRA;
 		sampler->shift = 6;
 		sampler->adcClock = LL_ADC_CLOCK_ASYNC_DIV2;
 		sampler->adcSampleTime = LL_ADC_SAMPLINGTIME_3CYCLES_5;
@@ -48,7 +47,6 @@ uint32_t setSampleRate(Sampler *sampler, uint32_t rate) {
 		sampler->adcOversampleShift = 0;
 	} else if (rate > 1750000) {
 		actualRate = 2916667;
-		sampler->speed = SPEED_FAST;
 		sampler->shift = 4;
 		sampler->adcClock = LL_ADC_CLOCK_ASYNC_DIV2;
 		sampler->adcSampleTime = LL_ADC_SAMPLINGTIME_3CYCLES_5;
@@ -57,7 +55,6 @@ uint32_t setSampleRate(Sampler *sampler, uint32_t rate) {
 		sampler->adcOversampleRatio = 0;
 		sampler->adcOversampleShift = 0;
 	} else {
-		sampler->speed = SPEED_NORMAL;
 		sampler->shift = 0;
 		sampler->adcSampleTime = LL_ADC_SAMPLINGTIME_7CYCLES_5;
 		sampler->adcResolution = LL_ADC_RESOLUTION_12B;
@@ -83,9 +80,9 @@ uint32_t setSampleRate(Sampler *sampler, uint32_t rate) {
 		sampler->adcOversampleShift = 0;
 	}
 
-	//TODO set holdoff such that we won't trigger while there's still junk in the buffer from old samples
+	//TODO set holdoff such that we won't trigger while there's still junk in the buffer from old samples in case shift is changed
 	//for now zero it out so it's obvious
-	memset(sampler->sampleBuffer, 0, sizeof(sampler->sampleBuffer));
+	// memset(sampler->sampleBuffer, 0, sizeof(sampler->sampleBuffer));
 
 	return sampler->sampleRate = actualRate;
 }
@@ -105,6 +102,5 @@ void startSampler(Sampler *sampler) {
 }
 
 int16_t getSample(Sampler *sampler, int index) {
-	int si = (sampler->startIndex + index) & SAMPLE_BUFFER_MASK;
-	return (sampler->sampleBuffer[si] << sampler->shift) - sampler->dcOffset;
+	return (sampler->snapshot[index] << sampler->shift) - sampler->dcOffset;
 }

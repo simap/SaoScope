@@ -12,14 +12,16 @@
 #include "ssd1306_tests.h"
 
 #include "sampler.h"
+#include "scope.h"
 #include "button.h"
 #include "dial.h"
 
 #include "stdio.h"
 
 Sampler sampler;
-ButtonState button1, button2, button3, button4;
-DialState dial1, dial2, dial3, dial4;
+ScopeSettings scope;
+ButtonState modeButton, runButton, edgeButton, signalButton;
+DialState vposDial, vdivDial, tdivDial, triggerDial;
 volatile uint32_t ticks;
 uint32_t vdd;
 
@@ -30,6 +32,7 @@ uint32_t getCycles() {
 
 void systickISR() {
 	ticks++;
+	adcManagerSystickISR();
 	// if (ticks & 1) {
 		//processing 3 buttons takes about 312 cycles
 		// uint32_t gpioState = GPIOA->IDR;
@@ -75,15 +78,20 @@ void delayCycles(uint32_t c) {
 volatile int rateSwitch = 0;
 
 void run() {
-	buttonInit(&button1, BUTTON_DEBOUNCE_COUNT, BUTTON_HOLD_COUNT);
-	buttonInit(&button2, BUTTON_DEBOUNCE_COUNT, BUTTON_HOLD_COUNT);
-	buttonInit(&button3, BUTTON_DEBOUNCE_COUNT, BUTTON_HOLD_COUNT);
-	buttonInit(&button4, BUTTON_DEBOUNCE_COUNT, BUTTON_HOLD_COUNT);
 
-	dialInit(&dial1, 0x8000, 3500, 100);
-	dialInit(&dial2, 0x8000, 3500, 100);
-	dialInit(&dial3, 0x8000, 3500, 100);
-	dialInit(&dial4, 0x8000, 3500, 100);
+	scope.mode = CONTINUOUS;
+	scope.runMode = STOPPED;
+
+
+	buttonInit(&modeButton, BUTTON_DEBOUNCE_COUNT, BUTTON_HOLD_COUNT);
+	buttonInit(&runButton, BUTTON_DEBOUNCE_COUNT, BUTTON_HOLD_COUNT);
+	buttonInit(&edgeButton, BUTTON_DEBOUNCE_COUNT, BUTTON_HOLD_COUNT);
+	buttonInit(&signalButton, BUTTON_DEBOUNCE_COUNT, BUTTON_HOLD_COUNT);
+
+	dialInit(&vposDial, 0x8000, 3500, 100);
+	dialInit(&vdivDial, 0x8000, 3500, 100);
+	dialInit(&tdivDial, 0x8000, 3500, 100);
+	dialInit(&triggerDial, 0x8000, 3500, 100);
 
 
 	LL_SYSTICK_EnableIT();
@@ -93,22 +101,23 @@ void run() {
 	initSampler(&sampler);
 	adcManagerSetup();
 
-	//set up TIM17 signal generation on PA7
+	//set up TIM14 signal generation on PA7
 	LL_GPIO_SetPinSpeed(GPIOA, LL_GPIO_PIN_7, LL_GPIO_SPEED_FREQ_VERY_HIGH);
 	LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_7, LL_GPIO_MODE_ALTERNATE);
-	LL_GPIO_SetAFPin_0_7(GPIOA, LL_GPIO_PIN_7, LL_GPIO_AF_5); //set to TIM17_CH1
+	LL_GPIO_SetAFPin_0_7(GPIOA, LL_GPIO_PIN_7, LL_GPIO_AF_4); //set to TIM14_CH1
 
-	LL_TIM_OC_SetMode(TIM17, LL_TIM_CHANNEL_CH1, LL_TIM_OCMODE_PWM1);
+	LL_TIM_OC_SetMode(TIM14, LL_TIM_CHANNEL_CH1, LL_TIM_OCMODE_PWM1);
 
-	int cycles = SystemCoreClock / 20000 ;
+	int signalFreq = 20000;
+	int cycles = SystemCoreClock / signalFreq;
 
-	LL_TIM_SetAutoReload(TIM17, cycles-1);
-	LL_TIM_OC_SetCompareCH1(TIM17, cycles / 2);
-	LL_TIM_GenerateEvent_UPDATE(TIM17);
+	LL_TIM_SetAutoReload(TIM14, cycles-1);
+	LL_TIM_OC_SetCompareCH1(TIM14, cycles / 2);
+	LL_TIM_GenerateEvent_UPDATE(TIM14);
 
-	LL_TIM_EnableAllOutputs(TIM17);
-	LL_TIM_CC_EnableChannel(TIM17, LL_TIM_CHANNEL_CH1);
-	LL_TIM_EnableCounter(TIM17);
+	LL_TIM_EnableAllOutputs(TIM14);
+	LL_TIM_CC_EnableChannel(TIM14, LL_TIM_CHANNEL_CH1);
+	LL_TIM_EnableCounter(TIM14);
 
 
 	//HACK speed up i2c, well above spec, but it works. about 1.25mhz
@@ -117,8 +126,8 @@ void run() {
 			0, //PRESCALER
 			1, //SETUP_TIME
 			0, //HOLD_TIME
-			8, //SCLH_PERIOD
-			8 //SCLL_PERIOD
+			6, //SCLH_PERIOD
+			12 //SCLL_PERIOD
 	));
 	LL_I2C_Enable(I2C1);
 
@@ -131,8 +140,9 @@ void run() {
     uint32_t frameTimer = ticks;
     volatile int fps = 0;
     int pwm;
-    int run = 1;
 	uint32_t rate = 1750000;
+
+	SSD1306_COLOR flickering = White;
 
     for(;;) {
 		adcManagerLoop();
@@ -144,23 +154,33 @@ void run() {
     		frame = 0;
     	}
 
-		if (dialPollChangeEvent(&dial3)) {
-			uint32_t tmp = dialGetValue(&dial3);
+		if (dialPollChangeEvent(&tdivDial)) {
+			uint32_t tmp = dialGetValue(&tdivDial);
 			tmp = (tmp * tmp)/95;
 			rate = tmp * 35000;
 			rate = setSampleRate(&sampler, rate);
 		}
 
-		if (buttonPollClickEvent(&button2)) {
-			run = !run;
+		int vdiv = dialGetValue(&vdivDial);
+		int vpos = dialGetValue(&vposDial);
+		int triggerValue = dialGetValue(&triggerDial) * 40 - 2048;
+
+		if (buttonPollClickEvent(&runButton)) {
+			scope.runMode = scope.runMode == STOPPED ? RUNNING : STOPPED;
 		}
 
-		// stopSampler(&sampler);
-
-		if (!run) {
-			continue;
+		if (buttonPollClickEvent(&modeButton)) {
+			int next = scope.mode + 1;
+			if (next > SINGLE)
+				next = CONTINUOUS;
+			scope.mode = next;
 		}
 
+		if (buttonPollClickEvent(&edgeButton)) {
+			scope.triggerSlope = scope.triggerSlope == RISING ? FALLING : RISING;
+		}
+
+		//draw scope
 
         ssd1306_Fill(Black);
 
@@ -171,13 +191,13 @@ void run() {
 		//find first rising edge
 
 		int start = -1;
-		for (int x = 64; x < 1024; x++) {
+		for (int x = SAMPLE_BUFFER_SIZE/2 - 5; x < SAMPLE_BUFFER_SIZE; x++) {
 			int sample = getSample(&sampler, x);
-			if (start == -1 && sample < 200) {
+			if (start == -1 && sample < triggerValue) {
 				start = x;
 			}
 
-			if (start >= 0 && sample > 200) {
+			if (start >= 0 && sample > triggerValue) {
 				start = x;
 				break;
 			}
@@ -188,10 +208,10 @@ void run() {
 
 		start -= 64;
 
-		int vdiv = dialGetValue(&dial2);
-		int vpos = dialGetValue(&dial1);
+
 
 		SSD1306_COLOR blink = (getTicks() & 0x80) ? White : Black;
+		flickering = (getTicks() & 0x20) ? White : Black;
 		for (int x = 0; x < SSD1306_WIDTH; x++) {
 			int sample = getSample(&sampler, x + start);
 			int mv = 15000 * sample / 2048;
@@ -213,8 +233,19 @@ void run() {
 				color = blink;
 			}
 			ssd1306_DrawPixel(x, y , color);
-
 		}
+
+		//draw trigger threshold line
+		for (int x = 0; x < SSD1306_WIDTH; x += 16) {
+			ssd1306_DrawPixel(x, vpos - triggerValue/vdiv, flickering);
+		}
+
+		//draw center line showing trigger time
+		for (int y = 0; y < 32; y += 8) {
+			ssd1306_DrawPixel(64, y, flickering);
+		}
+
+
 
     	// if (run) {
     	// 	startSampler(&sampler);
@@ -231,7 +262,7 @@ void run() {
 		// ssd1306_SetCursor(1, 16 + yStart);
 		// ssd1306_WriteString(buff, Font_6x8, Black);
 		
-		// snprintf(buff, sizeof(buff), "FPS: %d", fps);
+		// snprintf(buff, sizeof(buff), "FPS: %d ", fps);
 		// ssd1306_SetCursor(1, 24 + yStart);
 		// ssd1306_WriteString(buff, Font_6x8, White);
 
@@ -239,14 +270,40 @@ void run() {
 		ssd1306_SetCursor(1, 16 + yStart);
 		ssd1306_WriteString(buff, Font_6x8, White);
 
-		snprintf(buff, sizeof(buff), "%d, %d, %d, %d ", dialGetValue(&dial1), dialGetValue(&dial2), dialGetValue(&dial3), dialGetValue(&dial4));
-		ssd1306_SetCursor(1, 24 + yStart);
-		ssd1306_WriteString(buff, Font_6x8, White);
+		// snprintf(buff, sizeof(buff), "%d, %d, %d, %d ", dialGetValue(&vposDial), dialGetValue(&vdivDial), dialGetValue(&tdivDial), dialGetValue(&triggerDial));
+		// ssd1306_SetCursor(1, 24 + yStart);
+		// ssd1306_WriteString(buff, Font_6x8, White);
 
-		ssd1306_WriteString(button1.isHeld ? "H" : button1.isDown ? "O" : "-", Font_6x8, White);
-		ssd1306_WriteString(button2.isHeld ? "H" : button2.isDown ? "O" : "-", Font_6x8, White);
-		ssd1306_WriteString(button3.isHeld ? "H" : button3.isDown ? "O" : "-", Font_6x8, White);
-		ssd1306_WriteString(button4.isHeld ? "H" : button4.isDown ? "O" : "-", Font_6x8, White);
+		// ssd1306_WriteString(modeButton.isHeld ? "H" : modeButton.isDown ? "O" : "-", Font_6x8, White);
+		// ssd1306_WriteString(runButton.isHeld ? "H" : runButton.isDown ? "O" : "-", Font_6x8, White);
+		// ssd1306_WriteString(edgeButton.isHeld ? "H" : edgeButton.isDown ? "O" : "-", Font_6x8, White);
+		// ssd1306_WriteString(signalButton.isHeld ? "H" : signalButton.isDown ? "O" : "-", Font_6x8, White);
+
+
+		ssd1306_SetCursor(1, 24 + yStart);
+
+		const char * modeStr = scope.mode == CONTINUOUS ? "SCAN" : scope.mode == NORMAL ? "NORM" : "SING";
+		const char * runStr = scope.runMode == STOPPED ? "S" : "R";
+		const char * edgeStr = scope.triggerSlope == RISING ? "_/" : "\\_";
+
+		ssd1306_WriteString(modeStr, Font_6x8, White);
+		ssd1306_WriteString(" ", Font_6x8, White);
+		ssd1306_WriteString(runStr, Font_6x8, White);
+		ssd1306_WriteString(" ", Font_6x8, White);
+
+		//pad leading zeros for 5 digits
+		snprintf(buff, sizeof(buff), "~% 5d ", signalFreq);
+		ssd1306_WriteString(buff, Font_6x8, White);
+		ssd1306_WriteString(edgeStr, Font_6x8, White);
+
+
+		// snprintf(buff, sizeof(buff), "%d, %d, %d, %d ", dialGetValue(&vposDial), dialGetValue(&vdivDial), dialGetValue(&tdivDial), dialGetValue(&triggerDial));
+		// ssd1306_WriteString(buff, Font_6x8, White);
+
+		// ssd1306_WriteString(modeButton.isHeld ? "H" : modeButton.isDown ? "O" : "-", Font_6x8, White);
+		// ssd1306_WriteString(runButton.isHeld ? "H" : runButton.isDown ? "O" : "-", Font_6x8, White);
+		// ssd1306_WriteString(edgeButton.isHeld ? "H" : edgeButton.isDown ? "O" : "-", Font_6x8, White);
+		// ssd1306_WriteString(signalButton.isHeld ? "H" : signalButton.isDown ? "O" : "-", Font_6x8, White);
 
 
 
