@@ -19,6 +19,7 @@ typedef struct {
 	int startIndex;
 
 	volatile uint16_t snapshot[SAMPLE_BUFFER_SIZE]; //copy of the sample buffer for display
+	uint32_t snapshotSampleRate;
 	volatile uint8_t newSnapshotReady;
 	int16_t dcOffset;
 	int shift; //number of bits to shift the sample left to get a 12 bit value (in case of 8 or 6 bit sampling)
@@ -44,6 +45,6 @@ void startSampler(Sampler * s);
 
 
 int16_t getSample(Sampler * s, int index);
-
+int16_t getInterpolatedSample(Sampler *sampler, int32_t position);
 
 #endif /* INC_SAMPLER_H_ */

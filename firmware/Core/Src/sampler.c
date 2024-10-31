@@ -1,7 +1,8 @@
 #include "sampler.h"
 #include "string.h"
 
-#define EFFECTIVE_RATE(D) (int) (70000000 / (D) / (7.5 + 12.5) + 0.5)
+#define ADC_INPUT_CLOCK 70000000
+#define EFFECTIVE_RATE(D) (int) (ADC_INPUT_CLOCK / (D) / (7.5 + 12.5) + 0.5)
 
 typedef struct {
 	uint32_t clockSetting;
@@ -80,10 +81,6 @@ uint32_t setSampleRate(Sampler *sampler, uint32_t rate) {
 		sampler->adcOversampleShift = 0;
 	}
 
-	//TODO set holdoff such that we won't trigger while there's still junk in the buffer from old samples in case shift is changed
-	//for now zero it out so it's obvious
-	// memset(sampler->sampleBuffer, 0, sizeof(sampler->sampleBuffer));
-
 	return sampler->sampleRate = actualRate;
 }
 
@@ -103,4 +100,14 @@ void startSampler(Sampler *sampler) {
 
 int16_t getSample(Sampler *sampler, int index) {
 	return (sampler->snapshot[index] << sampler->shift) - sampler->dcOffset;
+}
+
+//position is a 16.16 fixed point number
+int16_t getInterpolatedSample(Sampler *sampler, int32_t position) {
+	int index = position >> 16;
+	int16_t sample = getSample(sampler, index);
+	int16_t nextSample = getSample(sampler, index + 1);
+	int32_t diff = nextSample - sample;
+	uint16_t frac = position & 0xffff;
+	return sample + ((diff * frac) >> 16);
 }

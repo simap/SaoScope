@@ -58,7 +58,7 @@ typedef struct {
 	ScopeMode mode;
 	RunMode runMode;
 
-	uint32_t XDivNs;   // Horizontal scale in ns/div
+	uint32_t xDivNs;   // Horizontal scale in ns/div
 	// int32_t XOffsetNs; // Horizontal offset in ns
 
 	ChannelSettings channel1;

@@ -22,8 +22,8 @@ TriggerEdge lastEdge = RISING;
 prebuffer -> free running circular ADC. set a timer to allow roughly half of the buffer to fill
 prearm -> set ADC WD for the level opposite trigger edge (e.g. high for falling edge)
     for continuous, also set a timer that will jump to capturing state if it hasn't happened yet
-armed -> set ADC WD for the trigger (e.g. low for falling edge)
-capturing -> set tim1 (triggered from wd) to capture half of the samples after the trigger
+armed -> set ADC WD for the trigger (e.g. low for falling edge), link to tim1 to start completion timer automatically
+capturing -> set tim1 to capture half of the samples after the trigger
 complete -> copy samples to snapshot (dma mem2mem or memcpy)
     for one-shot stop, all others repeat
     */
@@ -78,16 +78,35 @@ uint32_t calcCyclesToFillBufferToHalf() {
 }
 
 int32_t uvToAdc(int32_t uv) {
-    //convert the voltage to a 12 bit ADC value
-    return (uv * 4095) / vdd;
+    //adc values 0-4095 represent input voltages of -15V to +15V
+    
+    // 30v / 4096 * 1000000mv = 7324.21875 microvolts per adc step
+
+    //7324.21875 becomes a whole number if we multiply by 32 (or shift left by 5)
+    //magic number: 234375 = 7324.21875 * 32
+    //we have enough bits to multiply by 32 without overflow first
+
+    return ((uv << 5) / 234375) + 2047;
 }
 
 void setWdLow() {
     LL_ADC_ConfigAnalogWDThresholds(ADC1, LL_ADC_AWD1, 4095, uvToAdc(scope.triggerLevelUv));
+    LL_ADC_SetAnalogWDMonitChannels(ADC1, LL_ADC_AWD1, LL_ADC_AWD_CHANNEL_1_REG);
+    LL_ADC_ClearFlag_AWD1(ADC1);
+    LL_ADC_EnableIT_AWD1(ADC1);
 }
 
 void setWdHigh() {
     LL_ADC_ConfigAnalogWDThresholds(ADC1, LL_ADC_AWD1, uvToAdc(scope.triggerLevelUv), 0);
+    LL_ADC_SetAnalogWDMonitChannels(ADC1, LL_ADC_AWD1, LL_ADC_AWD_CHANNEL_1_REG);
+    LL_ADC_ClearFlag_AWD1(ADC1);
+    LL_ADC_EnableIT_AWD1(ADC1);
+}
+
+void disableWd() {
+    LL_ADC_DisableIT_AWD1(ADC1);
+    LL_ADC_ClearFlag_AWD1(ADC1);
+    LL_ADC_SetAnalogWDMonitChannels(ADC1, LL_ADC_AWD1, LL_ADC_AWD_DISABLE);
 }
 
 
@@ -171,6 +190,10 @@ void startScanningScope() {
 
     LL_ADC_REG_SetSequencerChannels(ADC1, LL_ADC_CHANNEL_1);
 
+    //disable WD for now
+    LL_ADC_DisableIT_AWD1(ADC1);
+    LL_ADC_SetAnalogWDMonitChannels(ADC1, LL_ADC_AWD1, LL_ADC_AWD_DISABLE);
+
     //switch dma to continuous
     LL_ADC_REG_SetContinuousMode(ADC1, LL_ADC_REG_CONV_CONTINUOUS);
     LL_ADC_REG_SetDMATransfer(ADC1, LL_ADC_REG_DMA_TRANSFER_UNLIMITED);
@@ -186,6 +209,9 @@ void startScanningScope() {
     LL_ADC_ConfigOverSamplingRatioShift(ADC1, sampler.adcOversampleRatio, sampler.adcOversampleShift);
     LL_ADC_SetCommonClock(ADC1_COMMON, sampler.adcClock);
 
+
+
+
     //FTM: CCRDY handshake requires 1APB + 2 ADC + 3 APB cycles after the channel configuration has been changed.
     //if CCRDY isn't set when the adc is enabled it will ignore changes
     //TODO since this happens much later than changing these settings, we could probably skip this
@@ -200,6 +226,7 @@ void startScanningScope() {
 
 void stopScanning() {
     adcStopAndDisable();
+    LL_DMA_ClearFlag_TC1(DMA1);
     scanningMode = AM_IDLE;
 }
 
@@ -230,6 +257,7 @@ void startCapturing() {
     scanningMode = AM_CAPTURING;
     //set tim1 to capture half of the samples after the trigger
     setTim1OneShot(calcCyclesToFillBufferToHalf());
+    disableWd();
 }
 
 void completeAndSnapshot() {
@@ -262,6 +290,28 @@ void adcManagerSystickISR() {
     if (scanningMode == AM_IDLE) {
        if (getTicks() - lastExtrasScan >= INTERFACE_SCAN_INTERVAL_MS) {
             startScanningExtras();
+        }
+    }
+}
+
+void ADC1_IRQHandler() {
+    if (LL_ADC_IsActiveFlag_AWD1(ADC1)) {
+        LL_ADC_ClearFlag_AWD1(ADC1);
+        switch (scanningMode) {
+            case AM_PREARM:
+                startArm();
+                break;
+            case AM_ARMED:
+                startCapturing();
+                break;
+            case AM_CAPTURING:
+            case AM_COMPLETE:
+            case AM_SCANNING_EXTRAS:
+            case AM_IDLE:
+            default:
+                //shouldn't happen
+                // HardFault_Handler();
+                break;
         }
     }
 }
@@ -299,7 +349,9 @@ void adcManagerDmaISR() {
                 break;
             case AM_COMPLETE:
             case AM_IDLE:
+            default:
                 //shouldn't happen
+                // HardFault_Handler();
                 break;
 
         }
@@ -328,7 +380,9 @@ void TIM1_BRK_UP_TRG_COM_IRQHandler() {
             case AM_COMPLETE:
             case AM_SCANNING_EXTRAS:
             case AM_IDLE:
+            default:
                 //shouldn't happen
+                HardFault_Handler();
                 break;
         }
     }
@@ -336,14 +390,15 @@ void TIM1_BRK_UP_TRG_COM_IRQHandler() {
 
 void adcManagerSetup() {
     //enable tim1 irq
-
     //first stop the timer and clear pending interrupts
     LL_TIM_DisableCounter(TIM1);
     LL_TIM_ClearFlag_UPDATE(TIM1);
-
     NVIC_SetPriority(TIM1_BRK_UP_TRG_COM_IRQn, 0);
     NVIC_EnableIRQ(TIM1_BRK_UP_TRG_COM_IRQn);
 
+    //enable adc irq for watchdog
+    NVIC_SetPriority(ADC1_IRQn, 0);
+    NVIC_EnableIRQ(ADC1_IRQn);
 
     //perform ADC calibration
 	LL_ADC_StartCalibration(ADC1);
@@ -365,7 +420,7 @@ void adcManagerLoop() {
         memcpy(sampler.snapshot, &sampler.sampleBuffer[sampler.startIndex], (SAMPLE_BUFFER_SIZE - sampler.startIndex) * sizeof(uint16_t));
         if (sampler.startIndex > 0)
             memcpy(&sampler.snapshot[SAMPLE_BUFFER_SIZE - sampler.startIndex], sampler.sampleBuffer, sampler.startIndex * sizeof(uint16_t));
-
+        sampler.snapshotSampleRate = sampler.sampleRate;
         sampler.newSnapshotReady = 0;
     }
     //TODO not sure if this belongs here, maybe move to something more about UI

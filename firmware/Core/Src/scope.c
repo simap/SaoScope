@@ -4,7 +4,7 @@
 #include "sampler.h"
 #include "stdio.h"
 
-#define TDIVMODCALC(xDivNs, rate) {xDivNs, rate, 1000000000 / rate}
+#define TDIVMODCALC(xDivNs, rate) {xDivNs, rate, 1000000000l / rate}
 
 typedef struct {
 	uint32_t xDivNs;
@@ -12,14 +12,40 @@ typedef struct {
 	uint32_t nsPerSample;
 } TDivMode;
 
-//with a sample buffer of 1024, there's 8x what we need for a 128px display.
-static const TDivMode tDivModes[1] = {
-		TDIVMODCALC(2000, 3500000),
-		TDIVMODCALC(5000, 2916667),
-		TDIVMODCALC(10000, 1750000),
-		TDIVMODCALC(20000, 1750000),
-		TDIVMODCALC(50000, 437500),
+/*
+static const AdcClockDividerSetting adcClockDividerSettings[11] = {
+		{LL_ADC_CLOCK_ASYNC_DIV2, EFFECTIVE_RATE(2)}, //1.75msps
+		{LL_ADC_CLOCK_ASYNC_DIV4, EFFECTIVE_RATE(4)}, //875ksps
+		{LL_ADC_CLOCK_ASYNC_DIV6, EFFECTIVE_RATE(6)}, //583ksps
+		{LL_ADC_CLOCK_ASYNC_DIV8, EFFECTIVE_RATE(8)}, //437.5ksps
+		{LL_ADC_CLOCK_ASYNC_DIV10, EFFECTIVE_RATE(10)}, //350ksps
+		{LL_ADC_CLOCK_ASYNC_DIV12, EFFECTIVE_RATE(12)}, //291.6ksps
+		{LL_ADC_CLOCK_ASYNC_DIV16, EFFECTIVE_RATE(16)}, //218.75ksps
+		{LL_ADC_CLOCK_ASYNC_DIV32, EFFECTIVE_RATE(32)}, //109.375ksps
+		{LL_ADC_CLOCK_ASYNC_DIV64, EFFECTIVE_RATE(64)}, //54.7ksps
+		{LL_ADC_CLOCK_ASYNC_DIV128, EFFECTIVE_RATE(128)}, //27.3ksps
+		{LL_ADC_CLOCK_ASYNC_DIV256, EFFECTIVE_RATE(256)} //13.6ksps
+};
+*/
 
+//with a sample buffer of 1024, there's 8x what we need for a 128px display.
+//with 16 pixels per div, we can show 8 divs on screen. when we have more than 3 or so samples per pixel, we could use a lower sample rate
+//scope stepping is usually 1, 2, 5, 10, 20, 50, 100, etc. thats a step of 2x, 2.5x, 2x, 2x, 2.5x, 2x, etc
+
+static const TDivMode tDivModes[1] = {
+		TDIVMODCALC(500, 1750000), //500ns/div, 0.875 samples per div, .054 samples per pixel
+		TDIVMODCALC(1000, 1750000), //1us/div, 1.75 samples per div, .109 samples per pixel
+		TDIVMODCALC(2000, 1750000), //2us/div, 3.5 samples per div, .218 samples per pixel
+		TDIVMODCALC(5000, 1750000), //5us/div, 8.75 samples per div, .546 samples per pixel
+		TDIVMODCALC(10000, 1750000), //10us/div, 17.5 samples per div, 1.09 samples per pixel
+		TDIVMODCALC(20000, 1750000), //20us/div, 35 samples per div, 2.18 samples per pixel
+		TDIVMODCALC(50000, 875000), //50us/div, 43.75 samples per div, 2.73 samples per pixel
+		TDIVMODCALC(100000, 437500), //100us/div, 43.75 samples per div, 2.73 samples per pixel
+		TDIVMODCALC(200000, 218750), //200us/div, 43.75 samples per div, 2.73 samples per pixel
+		TDIVMODCALC(500000, 109375), //500us/div, 54.7 samples per div, 3.42 samples per pixel
+		TDIVMODCALC(1000000, 54687.5), //1ms/div, 54.7 samples per div, 3.42 samples per pixel
+		TDIVMODCALC(2000000, 27343.75), //2ms/div, 54.7 samples per div, 3.42 samples per pixel
+		TDIVMODCALC(5000000, 13671.875), //5ms/div, 68.36 samples per div, 4.27 samples per pixel
 };
 
 // at 3.5msps 7 samples gives 2us/div

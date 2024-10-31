@@ -33,3 +33,4 @@ uint32_t getTicks();
 void adcManagerSystickISR();
 void adcManagerSetup();
 void adcManagerLoop();
+int32_t uvToAdc(int32_t uv);
