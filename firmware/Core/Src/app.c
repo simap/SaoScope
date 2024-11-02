@@ -25,8 +25,11 @@ DialState vposDial, vdivDial, tdivDial, triggerDial;
 volatile uint32_t ticks;
 uint32_t vdd;
 
-uint32_t nsDivSequence[] = {500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000, 2000000, 5000000, 10000000};
-
+const uint32_t nsDivSequence[] = {500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000, 2000000, 5000000, 10000000};
+const uint32_t signalGenFrequencies[] = {20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000};
+int signalGenIndex = 7;
+uint32_t messageTimer;
+char message[32];
 
 uint32_t getCycles() {
 	return SysTick->VAL;
@@ -35,29 +38,7 @@ uint32_t getCycles() {
 void systickISR() {
 	ticks++;
 	adcManagerSystickISR();
-	// if (ticks & 1) {
-		//processing 3 buttons takes about 312 cycles
-		// uint32_t gpioState = GPIOA->IDR;
-		// buttonProcess(&button1, gpioState & BUTTON1_Pin); //button1 is active high
-		// buttonProcess(&button2, !(gpioState & BUTTON2_Pin)); //button2 is active low
-		// buttonProcess(&button3, !(gpioState & BUTTON3_Pin)); //button3 is active low
-	// }
-
-//	if (ticks & 1) {
-//		LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_7);
-//	} else {
-//		LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_7);
-//	}
-
-	if ((ticks & 31) == 31) {
-		//TODO only do this if we aren't in a trigger capture event
-
-	}
-
 }
-
-
-
 
 uint32_t getTicks() {
 	return ticks;
@@ -77,9 +58,28 @@ void delayCycles(uint32_t c) {
 	}
 }
 
-volatile int rateSwitch = 0;
+
+void displayMessage(char *msg) {
+	strncpy(message, msg, sizeof(message));
+	messageTimer = ticks;
+}
+
+
+void displayTriggerLevelMessage() {
+	if (abs(scope.triggerLevelUv) < 1000000)
+		snprintf(message, sizeof(message), "Trg:  %4dmV", scope.triggerLevelUv/1000);
+	else
+		snprintf(message, sizeof(message), "Trg:%3d.%02dV", scope.triggerLevelUv/1000000, abs(scope.triggerLevelUv/10000) % 100);
+	messageTimer = ticks;
+}
 
 void run() {
+
+	//pause all peripherals and clocks in debug
+	DBG->APBFZ1 = 0xffffffff;
+	DBG->APBFZ2 = 0xffffffff;
+
+
 
 	scope.mode = CONTINUOUS;
 	scope.runMode = RUNNING;
@@ -112,14 +112,9 @@ void run() {
 
 	LL_TIM_OC_SetMode(TIM14, LL_TIM_CHANNEL_CH1, LL_TIM_OCMODE_PWM1);
 
-	int signalFreq = 20000;
-	int cycles = SystemCoreClock / signalFreq;
+    setSignalGen();
 
-	LL_TIM_SetAutoReload(TIM14, cycles-1);
-	LL_TIM_OC_SetCompareCH1(TIM14, cycles / 2);
-	LL_TIM_GenerateEvent_UPDATE(TIM14);
-
-	LL_TIM_EnableAllOutputs(TIM14);
+    LL_TIM_EnableAllOutputs(TIM14);
 	LL_TIM_CC_EnableChannel(TIM14, LL_TIM_CHANNEL_CH1);
 	LL_TIM_EnableCounter(TIM14);
 
@@ -183,13 +178,16 @@ void run() {
 		int vdiv = dialGetValue(&vdivDial);
 		int vpos = dialGetValue(&vposDial);
 
-		// if (dialPollChangeEvent(&triggerDial)) {
+		
 		if (1) {
 			int32_t tmp = triggerDial.steps - dialGetValue(&triggerDial);
 			tmp -= 128;
 			//use an exponential scale to get a more useful range. on the top we need +- 15v
 			//tmp^2 is up to 16384
 			scope.triggerLevelUv = abs(tmp) * tmp * (15000000 / 16384);
+		}
+		if (dialPollChangeEvent(&triggerDial)) {
+			displayTriggerLevelMessage();
 		}
 		int triggerSampleValue = uvToAdc(scope.triggerLevelUv) - 2048;
 		// int triggerValue = dialGetValue(&triggerDial) * 40 - 2048;
@@ -200,15 +198,21 @@ void run() {
 		}
 
 		if (buttonPollClickEvent(&modeButton)) {
-			//disable for now, crashes
-			// int next = scope.mode + 1;
-			// if (next > SINGLE)
-			// 	next = CONTINUOUS;
-			// scope.mode = next;
+			int next = scope.mode + 1;
+			if (next > SINGLE)
+				next = CONTINUOUS;
+			scope.mode = next;
 		}
 
 		if (buttonPollClickEvent(&edgeButton)) {
 			scope.triggerSlope = scope.triggerSlope == RISING ? FALLING : RISING;
+		}
+
+		if (buttonPollClickEvent(&signalButton)) {
+			signalGenIndex++;
+			if (signalGenIndex >= sizeof(signalGenFrequencies)/sizeof(signalGenFrequencies[0]))
+				signalGenIndex = 0;
+			setSignalGen();
 		}
 
 		//draw scope
@@ -220,7 +224,7 @@ void run() {
 
 
 		//refine edge detection
-
+#if 0
 		int start = -1;
 		for (int x = SAMPLE_BUFFER_SIZE/2 - 10; x < SAMPLE_BUFFER_SIZE; x++) {
 			int sample = getSample(&sampler, x);
@@ -248,11 +252,13 @@ void run() {
 		}
 
 		if (start < 64 || start > 800)
-			start = 64;
+			start = 512;
+#else
+		int start = SAMPLE_BUFFER_SIZE/2;
+#endif
 
 		start -= (64 * sampleScale) >> 16;
 		// start -= 64;
-		// start = SAMPLE_BUFFER_SIZE/2;
 
 
 		SSD1306_COLOR blink = (getTicks() & 0x80) ? White : Black;
@@ -309,34 +315,46 @@ void run() {
     	// 	startSampler(&sampler);
     	// }
 
+		/* screen design, 21 chars wide
+
+		|---------------------|
+		| plot area		      | y = 0-7
+		|                     | y = 8-15
+		|                     | y = 16-23
+		|                     | y = 24-31
+		|                     | y = 32-39
+		|                     | y = 40-47
+		|< messages | stats  >| y = 48-55
+		|1.0v 100ms  SCAN R _/|	y = 56-63
+		|---------------------|
+
+		*/
+
 		char buff[64];
 
-		const int yStart = 32;
+		const int yStart = 48;
+		ssd1306_SetCursor(1, yStart);
+
 		// ssd1306_FillRectangle(0, 15 + yStart, 127, 32 + yStart, White);
 		int Vp = (maxVoltage - minVoltage)/10;
 		int VpVolts = Vp/100;
 		int VpHv = (Vp - VpVolts*100);
-		// snprintf(buff, sizeof(buff), "Vp: %d.%02d", VpVolts, VpHv);
-		// ssd1306_SetCursor(1, 16 + yStart);
-		// ssd1306_WriteString(buff, Font_6x8, Black);
-		
-		// snprintf(buff, sizeof(buff), "FPS: %d ", fps);
-		// ssd1306_SetCursor(1, 24 + yStart);
-		// ssd1306_WriteString(buff, Font_6x8, White);
 
-		ssd1306_SetCursor(1, 16 + yStart);
-		snprintf(buff, sizeof(buff), "V: %dmv", vdd);
-		ssd1306_WriteString(buff, Font_6x8, White);
-		
-		int nsdiv = 16000000000l / rate;
-		if (nsdiv < 1000) {
-			snprintf(buff, sizeof(buff), " %dns", nsdiv);
-		} else if (nsdiv < 1000000) {
-			snprintf(buff, sizeof(buff), " %dus", nsdiv/1000);
+		if (message[0] != 0) {
+			if (ticks - messageTimer < 2000) {
+				ssd1306_WriteString(message, Font_6x8, White);
+			} else {
+				message[0] = 0;
+			}
 		} else {
-			snprintf(buff, sizeof(buff), " %dms", nsdiv/1000000);
+			//TODO show stats, like Vp, Vrms, frequency, etc
+			snprintf(buff, sizeof(buff), "Vdd:%dmv  FPS: %d", vdd, fps);
+			ssd1306_WriteString(buff, Font_6x8, White);
 		}
-		ssd1306_WriteString(buff, Font_6x8, White);
+
+		//show key scope settings
+		
+
 
 		// snprintf(buff, sizeof(buff), "%d, %d, %d, %d ", dialGetValue(&vposDial), dialGetValue(&vdivDial), dialGetValue(&tdivDial), dialGetValue(&triggerDial));
 		// ssd1306_SetCursor(1, 24 + yStart);
@@ -348,7 +366,7 @@ void run() {
 		// ssd1306_WriteString(signalButton.isHeld ? "H" : signalButton.isDown ? "O" : "-", Font_6x8, White);
 
 
-		ssd1306_SetCursor(1, 24 + yStart);
+		ssd1306_SetCursor(1, 8 + yStart);
 
 		const char * modeStr = scope.mode == CONTINUOUS ? "SCAN" : scope.mode == NORMAL ? "NORM" : "SING";
 		const char * runStr = scope.runMode == STOPPED ? "S" : "R";
@@ -358,9 +376,20 @@ void run() {
 		ssd1306_WriteString(" ", Font_6x8, White);
 		ssd1306_WriteString(runStr, Font_6x8, scope.runMode == STOPPED ? blink : White);
 		ssd1306_WriteString(" ", Font_6x8, White);
-		snprintf(buff, sizeof(buff), "~%dmv", scope.triggerLevelUv/1000);
+		// snprintf(buff, sizeof(buff), "~%dmv", scope.triggerLevelUv/1000);
+		// ssd1306_WriteString(buff, Font_6x8, White);
+
+		int nsdiv = 16000000000l / rate;
+		if (nsdiv < 1000) {
+			snprintf(buff, sizeof(buff), " %dns", nsdiv);
+		} else if (nsdiv < 1000000) {
+			snprintf(buff, sizeof(buff), " %dus", nsdiv/1000);
+		} else {
+			snprintf(buff, sizeof(buff), " %dms", nsdiv/1000000);
+		}
 		ssd1306_WriteString(buff, Font_6x8, White);
-		ssd1306_SetCursor(112, 24 + yStart);
+
+		ssd1306_SetCursor(112, 8 + yStart);
 		ssd1306_WriteString(edgeStr, Font_6x8, White);
 
 
@@ -378,4 +407,19 @@ void run() {
 
         frame++;
     }
+}
+
+void setSignalGen()
+{
+    int signalFreq = signalGenFrequencies[signalGenIndex];
+	int cycles = SystemCoreClock / signalFreq;
+	int prescaler = cycles>> 16;
+	if (prescaler > 0) {
+		cycles = cycles / (prescaler + 1);
+	}
+	LL_TIM_SetPrescaler(TIM14, prescaler);
+
+    LL_TIM_SetAutoReload(TIM14, cycles - 1);
+    LL_TIM_OC_SetCompareCH1(TIM14, cycles / 2);
+    LL_TIM_GenerateEvent_UPDATE(TIM14);
 }

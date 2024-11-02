@@ -151,6 +151,8 @@ void startScanningExtras() {
 
     adcStopAndDisable();
 
+    disableWd();
+
     //sample the 4 dials and vrefint
     LL_ADC_REG_SetSequencerChannels(ADC1, LL_ADC_CHANNEL_0 | LL_ADC_CHANNEL_2 | LL_ADC_CHANNEL_3 | LL_ADC_CHANNEL_6 | LL_ADC_CHANNEL_VREFINT);
 
@@ -239,6 +241,7 @@ void startPrearm() {
         setWdHigh();
     }
     if (scope.mode == CONTINUOUS) {
+        //TODO probably need a longer timeout to let more time waiting for a trigger. 
         setTim1OneShot(calcCyclesToFillBufferToHalf());
     }
 }
@@ -331,6 +334,8 @@ void adcManagerDmaISR() {
                     break;
                 }
                 //see if we should switch to scanning dials
+                //TODO its possible that for high speed scans we have a few samples aready, we aught to save those and resume later
+                //this will restart the whole process later
                 if (getTicks() - lastExtrasScan >= INTERFACE_SCAN_INTERVAL_MS) {
                     startScanningExtras();
                 }

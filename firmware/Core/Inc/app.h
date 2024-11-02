@@ -18,6 +18,11 @@
 #define SAMPLE_BUFFER_SIZE 1024
 #endif
 
+//ui message timer
+#ifndef MESSAGE_TIMEOUT_MS
+#define MESSAGE_TIMEOUT_MS 2000
+#endif
+
 //check that sample buffer size is a power of 2
 #if (SAMPLE_BUFFER_SIZE & (SAMPLE_BUFFER_SIZE - 1)) != 0
 #error "SAMPLE_BUFFER_SIZE must be a power of 2"
@@ -34,3 +39,4 @@ void adcManagerSystickISR();
 void adcManagerSetup();
 void adcManagerLoop();
 int32_t uvToAdc(int32_t uv);
+void setSignalGen();

@@ -55,8 +55,8 @@ typedef enum {
 //UI mode stuff wouldn't need to, but vdiv/tdiv/trigger stuff should
 
 typedef struct {
-	ScopeMode mode;
-	RunMode runMode;
+	volatile ScopeMode mode;
+	volatile RunMode runMode;
 
 	uint32_t xDivNs;   // Horizontal scale in ns/div
 	// int32_t XOffsetNs; // Horizontal offset in ns
