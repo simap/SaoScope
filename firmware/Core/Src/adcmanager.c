@@ -17,6 +17,7 @@ extern uint32_t vdd;
 extern ScopeSettings scope;
 
 TriggerEdge lastEdge = RISING;
+volatile int nextScopeMode = -1;
 
 /*
 prebuffer -> free running circular ADC. set a timer to allow roughly half of the buffer to fill
@@ -49,7 +50,12 @@ volatile uint16_t extrasSamples[5];
 volatile uint8_t extrasSamplesReady = 0;
 uint32_t lastExtrasScan = 0;
 
-void setTim1OneShot(volatile uint32_t period) {
+void setScopeMode(int mode) {
+    nextScopeMode = mode;
+}
+
+void setTim1OneShot(uint32_t period) {
+    LL_TIM_DisableCounter(TIM1);
     //change prescaler as needed to get around the desired period in clock cycles
     int prescaler = period >> 16;
     if (prescaler > 0) {
@@ -87,6 +93,10 @@ int32_t uvToAdc(int32_t uv) {
     //we have enough bits to multiply by 32 without overflow first
 
     return ((uv << 5) / 234375) + 2047;
+}
+
+int32_t adcToUv(int32_t adc) {
+    return ((adc - 2047) * 234375) >> 5;
 }
 
 void setWdLow() {
@@ -241,8 +251,7 @@ void startPrearm() {
         setWdHigh();
     }
     if (scope.mode == CONTINUOUS) {
-        //TODO probably need a longer timeout to let more time waiting for a trigger. 
-        setTim1OneShot(calcCyclesToFillBufferToHalf());
+        setTim1OneShot(CONTINUOUS_SCAN_TIMEOUT_CYCLES);
     }
 }
 
@@ -343,6 +352,14 @@ void adcManagerDmaISR() {
             case AM_SCANNING_EXTRAS:
                 //process the dial samples later, go back to scope scanning
                 extrasSamplesReady = 1;
+                if (nextScopeMode != -1) {
+                    scope.mode = nextScopeMode;
+                    nextScopeMode = -1;
+                    //set to running if we're switching to continuous mode
+                    if (scope.mode == CONTINUOUS) {
+                        scope.runMode = RUNNING;
+                    }
+                }
                 if (scope.runMode == RUNNING && !sampler.newSnapshotReady) {
                     startScanningScope();
                 } else {

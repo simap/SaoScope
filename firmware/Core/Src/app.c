@@ -27,6 +27,8 @@ uint32_t vdd;
 
 const uint32_t nsDivSequence[] = {500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000, 2000000, 5000000, 10000000};
 const uint32_t signalGenFrequencies[] = {20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000};
+const uint32_t vdivStepsMv[] = {100, 200, 500, 1000, 2000, 5000};
+
 int signalGenIndex = 7;
 uint32_t messageTimer;
 char message[32];
@@ -79,6 +81,14 @@ void displaySignalGenMessage() {
 		snprintf(message, sizeof(message), "Sig: %3dHz", freq);
 	else
 		snprintf(message, sizeof(message), "Sig: %3dKHz", freq/1000);
+	messageTimer = ticks;
+}
+
+void displayVdivMessage(int vdivMv) {
+	if (vdivMv < 1000)
+		snprintf(message, sizeof(message), "V/div:  %3dmV", vdivMv);
+	else
+		snprintf(message, sizeof(message), "V/div: %3d.%02dV", vdivMv/1000, (vdivMv/10) % 100);
 	messageTimer = ticks;
 }
 
@@ -149,7 +159,10 @@ void run() {
     volatile int fps = 0;
     int pwm;
 	uint32_t rate = 1750000;
-	int32_t sampleScale = 0x10000; 
+	int32_t sampleScale = 0x10000;
+	int32_t vdivScale = 0x10000;
+	int32_t vdivMv, vdivValue;
+	int vposOffset = 0;
 
 	SSD1306_COLOR flickering = White;
 
@@ -184,13 +197,46 @@ void run() {
 
 		sampleScale = ((int64_t)sampler.snapshotSampleRate<<16) / rate;
 
-		int vdiv = dialGetValue(&vdivDial);
-		int vpos = dialGetValue(&vposDial);
+		if (dialPollChangeEvent(&vposDial)) {
+			int32_t tmp = dialGetValue(&vposDial);
+			tmp -= vposDial.steps/2;
+			vposOffset = 32 + (abs(tmp) * tmp / 4);
+		}
+		
+		if (dialPollChangeEvent(&vdivDial)) {
+			int tmp = dialGetValue(&vdivDial);
+			// tmp = tmp*tmp;
+			if (tmp < 1)
+				tmp = 1;
+			vdivScale = (0x20000) / tmp;
+
+			//at this scale, how many mv/div are we showing in 16 pixels?
+			volatile int mv = adcToUv((16<<16) / vdivScale + 2047) / 1000;
+
+			//find the closest mv/div setting for this scale, shooting for 16 pixels per div. 
+			int best = 0;
+			int bestDiff = INT32_MAX;
+			for (int i = 0; i < sizeof(vdivStepsMv)/sizeof(vdivStepsMv[0]); i++) {
+				int diff = abs(vdivStepsMv[i] - mv);
+				if (diff < bestDiff) {
+					bestDiff = diff;
+					best = i;
+				}
+			}
+			vdivMv = vdivStepsMv[best];
+			vdivValue = uvToAdc(vdivMv * 1000) - 2047;
+			// displayVdivMessage(vdivMv);
+		}
+
+
+
+		// int vdiv = dialGetValue(&vdivDial);
+		// int vpos = dialGetValue(&vposDial);
 
 		
 		if (1) {
 			int32_t tmp = triggerDial.steps - dialGetValue(&triggerDial);
-			tmp -= 128;
+			tmp -= triggerDial.steps/2;
 			//use an exponential scale to get a more useful range. on the top we need +- 15v
 			//tmp^2 is up to 16384
 			scope.triggerLevelUv = abs(tmp) * tmp * (15000000 / 16384);
@@ -210,7 +256,7 @@ void run() {
 			int next = scope.mode + 1;
 			if (next > SINGLE)
 				next = CONTINUOUS;
-			scope.mode = next;
+			setScopeMode(next);
 		}
 
 		if (buttonPollClickEvent(&edgeButton)) {
@@ -290,7 +336,8 @@ void run() {
 			if (mv < minVoltage)
 				minVoltage = mv;
 
-			int y = vpos - sample/vdiv;
+			// int y = vpos - sample/vdiv;
+			int y = vposOffset - ((sample * vdivScale) >> 16);
 
 //				int y = 31 - sample/100;
 			SSD1306_COLOR color = White;
@@ -304,20 +351,47 @@ void run() {
 			ssd1306_DrawPixel(x, y , color);
 		}
 
-		//draw trigger threshold line
-		for (int x = 0; x < SSD1306_WIDTH; x += 16) {
-			// ssd1306_DrawPixel(x, vpos - triggerValue/vdiv, flickering);
-			//now from triggerLevelUv. convering microvolts to ADC value
-			int y = vpos - triggerSampleValue/vdiv;
-			ssd1306_DrawPixel(x, y, flickering);
-		}
+
 
 		//draw center line showing trigger time
-		for (int y = 0; y < 48; y += 8) {
-			ssd1306_DrawPixel(64, y, flickering);
-			// ssd1306_DrawPixel(0, y, flickering);
-			// ssd1306_DrawPixel(127, y, flickering);
+		// for (int y = 0; y < 48; y += 8) {
+		// 	ssd1306_DrawPixel(64, y, flickering);
+		// 	// ssd1306_DrawPixel(0, y, flickering);
+		// 	// ssd1306_DrawPixel(127, y, flickering);
+		// }
+
+		//draw vdiv dots
+		for (int i = -5; i < 5; i++) {
+			int yOffset = ((i * vdivValue * vdivScale) >> 16);
+			// ssd1306_DrawPixel(64, vposOffset - yOffset, White);
+
+			//draw these every 16 pixels, 8 for ground line
+			int increment = i == 0 ? 8: 16;
+			for (int x = 0; x < 128; x += increment) {
+				int y = vposOffset - yOffset;
+				if (y > 56) //skip area with text
+					continue;
+				ssd1306_DrawPixel(x, y, flickering);
+			}
 		}
+
+		//draw trigger threshold line
+		{
+			int y = vposOffset - ((triggerSampleValue * vdivScale) >> 16);
+			for (int x = 0; x < SSD1306_WIDTH; x += 4) {
+				// ssd1306_DrawPixel(x, vpos - triggerValue/vdiv, flickering);
+				//now from triggerLevelUv. convering microvolts to ADC value
+				// int y = vposOffset - triggerSampleValue/vdiv;
+				ssd1306_DrawPixel(x, y, flickering);
+			}
+		}
+
+		// //draw ground line every 8 pixels
+		// for (int x = 0; x < 128; x += 8) {
+		// 	ssd1306_DrawPixel(x, vposOffset, White);
+		// }
+
+
 
 
 
@@ -358,8 +432,8 @@ void run() {
 			}
 		} else {
 			//TODO show stats, like Vp, Vrms, frequency, etc
-			snprintf(buff, sizeof(buff), "Vdd:%dmv  FPS: %d", vdd, fps);
-			ssd1306_WriteString(buff, Font_6x8, White);
+			// snprintf(buff, sizeof(buff), "Vdd:%dmv  FPS: %d", vdd, fps);
+			// ssd1306_WriteString(buff, Font_6x8, White);
 		}
 
 		//show key scope settings
@@ -391,12 +465,18 @@ void run() {
 
 		int nsdiv = 16000000000l / rate;
 		if (nsdiv < 1000) {
-			snprintf(buff, sizeof(buff), " %dns", nsdiv);
+			snprintf(buff, sizeof(buff), "%dns", nsdiv);
 		} else if (nsdiv < 1000000) {
-			snprintf(buff, sizeof(buff), " %dus", nsdiv/1000);
+			snprintf(buff, sizeof(buff), "%dus", nsdiv/1000);
 		} else {
-			snprintf(buff, sizeof(buff), " %dms", nsdiv/1000000);
+			snprintf(buff, sizeof(buff), "%dms", nsdiv/1000000);
 		}
+		ssd1306_WriteString(buff, Font_6x8, White);
+
+		if (vdivMv < 1000)
+			snprintf(buff, sizeof(buff), " .%dV", vdivMv/100);
+		else
+			snprintf(buff, sizeof(buff), " %dV", vdivMv/1000);
 		ssd1306_WriteString(buff, Font_6x8, White);
 
 		ssd1306_SetCursor(112, 8 + yStart);
@@ -429,7 +509,7 @@ void setSignalGen()
 	}
 	LL_TIM_SetPrescaler(TIM14, prescaler);
 
-    LL_TIM_SetAutoReload(TIM14, cycles - 1);
+    LL_TIM_SetAutoReload(TIM14, cycles - 1 + 1);
     LL_TIM_OC_SetCompareCH1(TIM14, cycles / 2);
     LL_TIM_GenerateEvent_UPDATE(TIM14);
 }

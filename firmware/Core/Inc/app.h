@@ -23,6 +23,11 @@
 #define MESSAGE_TIMEOUT_MS 2000
 #endif
 
+#ifndef CONTINUOUS_SCAN_TIMEOUT_CYCLES
+//200ms in cycles at 56mhz
+#define CONTINUOUS_SCAN_TIMEOUT_CYCLES (30 * 56000000ll / 1000)
+#endif
+
 //check that sample buffer size is a power of 2
 #if (SAMPLE_BUFFER_SIZE & (SAMPLE_BUFFER_SIZE - 1)) != 0
 #error "SAMPLE_BUFFER_SIZE must be a power of 2"
@@ -39,4 +44,6 @@ void adcManagerSystickISR();
 void adcManagerSetup();
 void adcManagerLoop();
 int32_t uvToAdc(int32_t uv);
+int32_t adcToUv(int32_t adc);
 void setSignalGen();
+void setScopeMode(int mode);
