@@ -73,6 +73,15 @@ void displayTriggerLevelMessage() {
 	messageTimer = ticks;
 }
 
+void displaySignalGenMessage() {
+	int freq = signalGenFrequencies[signalGenIndex];
+	if (freq < 1000)
+		snprintf(message, sizeof(message), "Sig: %3dHz", freq);
+	else
+		snprintf(message, sizeof(message), "Sig: %3dKHz", freq/1000);
+	messageTimer = ticks;
+}
+
 void run() {
 
 	//pause all peripherals and clocks in debug
@@ -213,6 +222,7 @@ void run() {
 			if (signalGenIndex >= sizeof(signalGenFrequencies)/sizeof(signalGenFrequencies[0]))
 				signalGenIndex = 0;
 			setSignalGen();
+			displaySignalGenMessage();
 		}
 
 		//draw scope
@@ -224,9 +234,9 @@ void run() {
 
 
 		//refine edge detection
-#if 0
+#if 1
 		int start = -1;
-		for (int x = SAMPLE_BUFFER_SIZE/2 - 10; x < SAMPLE_BUFFER_SIZE; x++) {
+		for (int x = SAMPLE_BUFFER_SIZE/2 - 20; x < SAMPLE_BUFFER_SIZE/2 + 20; x++) {
 			int sample = getSample(&sampler, x);
 
 			if (scope.triggerSlope == RISING) {
